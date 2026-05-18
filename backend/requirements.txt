@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+qdrant-client
+sentence-transformers
+numpy
+scipy
+python-docx
+pypdf
+FlagEmbedding

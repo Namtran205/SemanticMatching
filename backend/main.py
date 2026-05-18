@@ -1,0 +1,193 @@
+import time
+import os
+import shutil
+import traceback
+from pathlib import Path
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
+
+from .config import LLM_MODEL, LLM_PROVIDER, DATA_DIR, RERANKER_ENABLED
+from .core.document_parser import extract_text_from_file, smart_split
+from .core.llm_client import check_ollama_health
+from .core.qdrant_store import vector_store
+from .core.pdf_converter import convert_to_pdf
+from .pipeline.quick_compare import run_quick_compare
+from .pipeline.demo_retrieval import run_demo_retrieval
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Preloading embedding model...")
+    from .core.embedding_manager import get_embedder
+    get_embedder()
+    
+    if RERANKER_ENABLED:
+        print("Preloading reranker model...")
+        from .core.reranker import _load_reranker
+        _load_reranker()
+    yield
+
+app = FastAPI(title="Legal Compare API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+CACHE_DIR = DATA_DIR / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+SESSION_STATE = {
+    "file_1": None,
+    "file_2": None,
+    "latest_report": None,
+}
+
+@app.post("/api/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    slot: str = Query(...)
+):
+    if slot not in ["file_1", "file_2"]:
+        raise HTTPException(status_code=400, detail="Slot không hợp lệ")
+
+    if slot == "file_2" and not SESSION_STATE.get("file_1"):
+        raise HTTPException(status_code=409, detail="Cần upload file 1 trước")
+
+    if slot == "file_1":
+        SESSION_STATE["file_1"] = None
+        SESSION_STATE["file_2"] = None
+
+    file_ext = Path(file.filename).suffix.lower()
+    temp_path = CACHE_DIR / f"upload_{slot}{file_ext}"
+    pdf_path = CACHE_DIR / f"{slot}.pdf"
+
+    with temp_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    with temp_path.open("rb") as f:
+        file_bytes = f.read()
+    
+    text = extract_text_from_file(file.filename, file_bytes)
+    if not text:
+        raise HTTPException(status_code=400, detail="Không thể trích xuất văn bản từ file")
+
+    chunks = smart_split(text)
+
+    vector_store.add_chunks(doc_id=slot, chunks=chunks)
+
+    try:
+        convert_to_pdf(temp_path, pdf_path)
+    except Exception as e:
+        print(f"Warning: PDF conversion failed: {e}")
+    
+    SESSION_STATE[slot] = {
+        "filename": file.filename,
+        "chunk_count": len(chunks),
+        "pdf_available": pdf_path.exists()
+    }
+
+    return {
+        "success": True,
+        "slot": slot,
+        "message": f"Upload và xử lý {slot} thành công",
+        "pdf_url": f"/api/documents/{slot}/pdf" if pdf_path.exists() else None
+    }
+
+
+@app.get("/api/documents/{slot}/pdf")
+async def get_pdf(slot: str):
+    pdf_path = CACHE_DIR / f"{slot}.pdf"
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="Không tìm thấy PDF")
+    return FileResponse(
+        pdf_path, 
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={slot}.pdf"}
+    )
+
+
+@app.post("/api/compare")
+async def compare_documents():
+    if not SESSION_STATE.get("file_1") or not SESSION_STATE.get("file_2"):
+        raise HTTPException(status_code=400, detail="Cần upload đủ 2 file trước khi so sánh")
+
+    start_time = time.time()
+
+    try:
+        chunks_a = vector_store.get_chunks_by_doc_id("file_1", with_vectors=True)
+        chunks_b = vector_store.get_chunks_by_doc_id("file_2", with_vectors=True)
+
+        if not chunks_a or not chunks_b:
+            raise HTTPException(status_code=400, detail="Không tìm thấy dữ liệu vector. Vui lòng upload lại.")
+
+        print(f"\nStarting comparison: {len(chunks_a)} vs {len(chunks_b)} chunks")
+        report = run_demo_retrieval(chunks_a, chunks_b, top_k=5)
+        
+        SESSION_STATE["latest_report"] = report
+
+        duration = time.time() - start_time
+
+        return {
+            "success": True,
+            "duration_sec": round(duration, 2),
+            "report": report,
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ChatRequest(BaseModel):
+    message: str
+
+@app.post("/api/chat")
+async def chat_with_report(req: ChatRequest):
+    report = SESSION_STATE.get("latest_report")
+    if not report:
+        raise HTTPException(status_code=400, detail="Chưa có kết quả so sánh để hỏi đáp.")
+    
+    details = report.get("details", [])
+    changes = [item for item in details if item.get("clause_change_type") in ["modified", "added", "deleted"]]
+    
+    context_lines = []
+    for item in changes:
+        title = item.get("section_title_a") or item.get("section_title_b") or "Đoạn văn"
+        summary = item.get("summary", "")
+        context_lines.append(f"- {title}: {summary}")
+    
+    context_str = "\n".join(context_lines)
+    if not context_str:
+        context_str = "Không có thay đổi nào giữa hai văn bản."
+    
+    prompt = f"""Bạn là trợ lý pháp lý chuyên nghiệp. Hãy trả lời câu hỏi của người dùng dựa vào danh sách các điểm thay đổi giữa hai văn bản dưới đây (KHÔNG dùng kiến thức bên ngoài nếu không chắc chắn).
+    
+DANH SÁCH THAY ĐỔI:
+{context_str}
+
+CÂU HỎI CỦA NGƯỜI DÙNG: {req.message}
+"""
+    messages = [
+        {"role": "system", "content": "Bạn là trợ lý pháp lý khách quan, tư vấn dựa trên dữ liệu so sánh được cung cấp."},
+        {"role": "user", "content": prompt}
+    ]
+    
+    from .core.llm_client import stream_chat_completion
+    return StreamingResponse(stream_chat_completion(messages, temperature=0.1), media_type="text/event-stream")
+
+
+@app.get("/api/health")
+def health_check():
+    ollama_ok = check_ollama_health()
+    return {
+        "status": "ok",
+        "ollama": "connected" if ollama_ok else "disconnected",
+        "model": LLM_MODEL,
+        "provider": LLM_PROVIDER,
+    }
