@@ -1,4 +1,4 @@
-"""Document parser — trích xuất text + smart chunking 3 cấp + fallback."""
+
 
 import io
 import re
@@ -21,7 +21,7 @@ NUMBERED_HEADING_PATTERN = re.compile(
 
 
 def extract_text_from_file(filename: str, file_bytes: bytes) -> str:
-    """Trích xuất text từ DOCX hoặc PDF."""
+
     suffix = filename.lower().rsplit(".", 1)[-1]
 
     if suffix == "docx":
@@ -39,7 +39,7 @@ def extract_text_from_file(filename: str, file_bytes: bytes) -> str:
 
 
 def normalize_text(text: str) -> str:
-    """Chuẩn hóa whitespace và line endings."""
+
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]+", " ", text)
@@ -160,11 +160,7 @@ def _split_by_paragraphs(text: str) -> List[Dict[str, Any]]:
 
 
 def smart_split(text: str) -> List[Dict[str, Any]]:
-    """Smart chunking 3 cấp.
-    Tier 1: Điều/Article
-    Tier 2: Chương/Mục hoặc Numbered (1. / 2.)
-    Tier 3: Đoạn văn (giới hạn max chunks)
-    """
+
     text = normalize_text(text)
 
     chunks = _split_by_regex(text, ARTICLE_PATTERN, "Điều")
@@ -194,7 +190,7 @@ def smart_split(text: str) -> List[Dict[str, Any]]:
 
 
 def parse_documents(text_a: str, text_b: str, doc_id: str = "document_compare") -> List[Dict[str, Any]]:
-    """Parse và gán metadata version_id cho cả 2 văn bản."""
+
     chunks_a = smart_split(text_a)
     chunks_b = smart_split(text_b)
 

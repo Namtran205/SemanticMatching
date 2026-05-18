@@ -1,4 +1,4 @@
-"""Text differ engine — tính toán khác biệt word-level chính xác."""
+
 
 import re
 import difflib
@@ -6,13 +6,13 @@ import unicodedata
 from typing import Dict, Any, List
 
 def normalize_for_diff(text: str) -> str:
-    """Chuẩn hóa để tránh false positives do format."""
+
     text = unicodedata.normalize("NFC", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 def _extract_phrases(diff_tokens: List[Dict[str, str]], target_type: str) -> List[str]:
-    """Gom các token cùng loại (added/removed) liên tiếp thành cụm từ."""
+
     phrases = []
     current_phrase = []
     
@@ -30,20 +30,12 @@ def _extract_phrases(diff_tokens: List[Dict[str, str]], target_type: str) -> Lis
     return phrases
 
 def _is_trivial(phrase: str) -> bool:
-    """Kiểm tra xem cụm từ có phải là thay đổi vụn vặt (chỉ gồm dấu câu hoặc < 3 ký tự)."""
+
     clean_phrase = re.sub(r"[^\w\s]", "", phrase).strip()
     return len(clean_phrase) < 2
 
 def compute_word_diff(text_a: str, text_b: str) -> Dict[str, Any]:
-    """Tính toán khác biệt word-level bằng difflib.
-    
-    Trả về Dict chứa:
-    - is_identical: bool (đã loại bỏ khác biệt format)
-    - diff_tokens: list các token {type: 'equal'|'added'|'removed', value: str}
-    - added_phrases: list các cụm từ thêm vào
-    - removed_phrases: list các cụm từ bị xóa
-    - change_summary: câu tóm tắt tự động
-    """
+
     if not text_a and not text_b:
         return {"is_identical": True, "added_phrases": [], "removed_phrases": [], "diff_tokens": [], "change_summary": "Giống hệt nhau."}
 

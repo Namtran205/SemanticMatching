@@ -1,6 +1,4 @@
-"""Cross-encoder Reranker — xác minh matching quality bằng cross-encoder.
-Sử dụng FlagReranker hoặc CrossEncoder với graceful fallback.
-"""
+
 
 import numpy as np
 from typing import List, Optional
@@ -12,7 +10,7 @@ _reranker_available = None  # None = chưa thử load, True/False = đã biết
 
 
 def _load_reranker():
-    """Lazy-load reranker model. Thử FlagEmbedding → CrossEncoder → disable."""
+
     global _reranker, _reranker_available
 
     if _reranker_available is not None:
@@ -45,17 +43,13 @@ def _load_reranker():
 
 
 def is_reranker_available() -> bool:
-    """Kiểm tra reranker có sẵn không."""
+
     _load_reranker()
     return bool(_reranker_available)
 
 
 def rerank_pairs(query_texts: List[str], passage_texts: List[str]) -> Optional[np.ndarray]:
-    """Score các cặp query-passage bằng cross-encoder.
-    
-    Returns:
-        np.ndarray of scores nếu reranker available, None nếu không.
-    """
+
     reranker = _load_reranker()
     if reranker is None:
         return None

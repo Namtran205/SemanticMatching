@@ -1,4 +1,4 @@
-"""LLM client — hỗ trợ Ollama native API và OpenAI-compatible API."""
+
 
 import json
 import re
@@ -22,7 +22,7 @@ def _call_ollama_native(
     temperature: float = 0.0,
     max_tokens: int = 256,
 ) -> str:
-    """Gọi Ollama /api/generate trực tiếp, bật format: json."""
+
     url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/generate"
     payload = {
         "model": LLM_MODEL,
@@ -55,7 +55,7 @@ def _call_openai_compatible(
     temperature: float = 0.0,
     max_tokens: int = 256,
 ) -> str:
-    """Gọi OpenAI-compatible /v1/chat/completions."""
+
     base = LLM_BASE_URL.rstrip("/")
     url = f"{base}/chat/completions" if base.endswith("/v1") else f"{base}/v1/chat/completions"
 
@@ -93,7 +93,7 @@ def chat_completion(
     use_cache: bool = True,
     retries: int = 1,
 ) -> str:
-    """Gọi LLM — tự động dispatch theo config, có retry logic."""
+
     prompt_text = messages[-1]["content"] if messages else ""
     cache_key = prompt_text
 
@@ -125,7 +125,7 @@ def chat_completion(
 
 
 def stream_chat_completion(messages: List[Dict[str, str]], temperature: float = 0.0):
-    """Gọi LLM và trả về dạng stream (dành cho Chatbot)."""
+
     if LLM_PROVIDER == "ollama":
         url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat"
         payload = {
@@ -185,7 +185,7 @@ def stream_chat_completion(messages: List[Dict[str, str]], temperature: float = 
 
 
 def check_ollama_health() -> bool:
-    """Kiểm tra Ollama API có đang chạy không."""
+
     url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/tags"
     req = urllib.request.Request(url, method="GET")
     try:
@@ -196,7 +196,7 @@ def check_ollama_health() -> bool:
 
 
 def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
-    """Trích xuất JSON object từ LLM response (xử lý think tags & markdown fences)."""
+
     text = text.strip()
     if not text:
         return None
