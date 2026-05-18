@@ -1,7 +1,7 @@
 import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
-from ..config import DATA_DIR, BATCH_SIZE, TOP_K
+from ..config import DATA_DIR, BATCH_SIZE
 
 QDRANT_LOCAL_PATH = DATA_DIR / "qdrant_data"
 COLLECTION_NAME = "legal_chunks_demo"

@@ -3,7 +3,7 @@
 import numpy as np
 from typing import List, Optional
 
-from ..config import RERANKER_ENABLED, RERANKER_MODEL, RERANKER_THRESHOLD
+from ..config import RERANKER_ENABLED, RERANKER_MODEL
 
 _reranker = None
 _reranker_available = None  # None = chưa thử load, True/False = đã biết

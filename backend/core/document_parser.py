@@ -189,28 +189,4 @@ def smart_split(text: str) -> List[Dict[str, Any]]:
     }]
 
 
-def parse_documents(text_a: str, text_b: str, doc_id: str = "document_compare") -> List[Dict[str, Any]]:
-
-    chunks_a = smart_split(text_a)
-    chunks_b = smart_split(text_b)
-
-    all_chunks = []
-
-    for item in chunks_a:
-        all_chunks.append({
-            "chunk_id": f"A_{item['clause_no']}",
-            "doc_id": doc_id,
-            "version_id": "A",
-            **item,
-        })
-
-    for item in chunks_b:
-        all_chunks.append({
-            "chunk_id": f"B_{item['clause_no']}",
-            "doc_id": doc_id,
-            "version_id": "B",
-            **item,
-        })
-
-    return all_chunks
 

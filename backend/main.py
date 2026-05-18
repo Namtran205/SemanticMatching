@@ -4,7 +4,7 @@ import shutil
 import traceback
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from .core.document_parser import extract_text_from_file, smart_split
 from .core.llm_client import check_ollama_health
 from .core.qdrant_store import vector_store
 from .core.pdf_converter import convert_to_pdf
-from .pipeline.quick_compare import run_quick_compare
+
 from .pipeline.demo_retrieval import run_demo_retrieval
 
 @asynccontextmanager
